@@ -1,0 +1,2 @@
+https://openf1.org/?python#sessions
+https://github.com/br-g/openf1/discussions/10
