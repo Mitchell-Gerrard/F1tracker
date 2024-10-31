@@ -16,12 +16,14 @@ class Data:
     print(self.Sessiondata.columns)
     print(self.Sessiondata)
     self.start=self.Sessiondata['date_start'][0]
-    titi.sleep(10)
-    print(self.start)
+    print('start',self.start)
     response = urlopen(f'https://api.openf1.org/v1/car_data?session_key={Session}&driver_number=4')
     data = json.loads(response.read().decode('utf-8'))
     cardata=pd.DataFrame(data)
     self.cardata = pd.DataFrame(columns=cardata.columns)
+    print('firstdata', cardata['date'][1])
+    self.firsttime = cardata['date'][1]
+    print(self.firsttime)
     #formatted_time = last_query_time.strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
     print(self.cardata.columns,cardata.columns,cardata)
     '''
@@ -32,20 +34,28 @@ class Data:
     intervaldata=pd.DataFrame(data)
     self.intervaldata=pd.DataFrame(columns=intervaldata.columns)
     '''
-  def Updater(self):
-    date_format = '%Y-%m-%dT%H:%M:%S%z'  # Correct format without milliseconds
+  def Updater(self,buffer_lock):
+      # Correct format without milliseconds
 
-    last_query_time = datetime.strptime(self.start, date_format)
+    last_query_time = datetime.strptime(self.firsttime, '%Y-%m-%dT%H:%M:%S.%f+00:00')
     time=self.start
+    print('yo')
     while True:
-     formatted_time = time
-     response = urlopen(f'https://api.openf1.org/v1/car_data?session_key={self.Session}&date={formatted_time}')
-     data = json.loads(response.read().decode('utf-8'))
-     cardata=pd.DataFrame(data)
-     self.cardata = pd.concat([self.cardata,cardata])
-     titi.sleep(int(self.Freq))
-     print(self.cardata,cardata)
-     time = cardata['date'][-1]
+     try:
+      formatted_time = last_query_time.strftime('%Y-%m-%dT%H:%M:%S.%f+00:00')
+      print(formatted_time)
+      response = urlopen(f'https://api.openf1.org/v1/car_data?session_key={self.Session}&date<{formatted_time}')
+      data = json.loads(response.read().decode('utf-8'))
+      cardata=pd.DataFrame(data)
+      with buffer_lock:
+       self.cardata = pd.concat([self.cardata,cardata])
+      titi.sleep(int(self.Freq))
+      print('up',last_query_time,len(cardata))
+      last_query_time = datetime.strptime(data[-1]['date'], '%Y-%m-%dT%H:%M:%S.%f+00:00')+ timedelta(seconds=30)
+      print(last_query_time,data[-1]['date'],data[0]['date'])
+     except Exception as e:
+       print(e)
+       titi.sleep(int(self.Freq))
      '''
 
      response = urlopen(f'https://api.openf1.org/v1/intervals?session_key={self.Session}&{formatted_time}')
