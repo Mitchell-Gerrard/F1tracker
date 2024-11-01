@@ -4,7 +4,7 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import random
 import Data
-data=Data.Data('latest')
+#data=Data.Data('latest')
 # Create the main application window
 root = tk.Tk()
 root.title("Multi-Graph and Input Dashboard")

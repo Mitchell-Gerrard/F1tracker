@@ -6,7 +6,9 @@ import random
 import Data
 import threading
 import time
-data=Data.Data('9159')
+import matplotlib.pyplot as plt
+import pandas as pd
+data=Data.Data('latest')
 def updater():
    data.Updater(buffer_lock)
 def ploper():
@@ -22,9 +24,21 @@ def ploper():
    except:
      print('fail',data.cardata['speed'])
      time.sleep(10)
+cars=[4,1]
+start,end=data.laptimes(10,cars)
+cardatas=data.histcardata(start,end,cars)
+
+nor=cardatas[cardatas['driver_number']==4]
+ver=cardatas[cardatas['driver_number']==1]
+plt.plot(pd.to_datetime(ver['date']),ver['speed'],label='ver')
+plt.plot(pd.to_datetime(nor['date']),nor['speed'],label='nor')
+plt.legend()
+plt.show()
+'''
 buffer_lock = threading.Lock()
 updatingthred=threading.Thread(target=updater)
 updatingthred.start()
 
 printing=threading.Thread(target=ploper)
 printing.start()
+'''
