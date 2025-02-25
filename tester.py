@@ -8,25 +8,25 @@ import threading
 import time
 import matplotlib.pyplot as plt
 import pandas as pd
-data=Data.Data('latest')
+Data=Data.Data('latest')
 def updater():
-   data.Updater(buffer_lock)
+   Data.Updater(buffer_lock)
 def ploper():
   while True:
    try:
    # print('yo')
     with buffer_lock:
-     ver=data.cardata[data.cardata.driver_number==1]
+     ver=Data.cardata[Data.cardata.driver_number==1]
      print(ver['speed'].iloc[-1])
      #print(ver['date'].iloc[0])
     # print(ver['date'].iloc[-1])
      time.sleep(1)
    except:
-     print('fail',data.cardata['speed'])
+     print('fail',Data.cardata['speed'])
      time.sleep(10)
 cars=[4,1]
-start,end=data.laptimes(10,cars)
-cardatas=data.histcardata(start,end,cars)
+start,end=Data.laptimes(10,cars)
+cardatas=Data.histcardata(start,end,cars)
 
 nor=cardatas[cardatas['driver_number']==4]
 ver=cardatas[cardatas['driver_number']==1]

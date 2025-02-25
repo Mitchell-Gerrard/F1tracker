@@ -1,111 +1,193 @@
 import dash
 from dash import dcc, html, Input, Output
+import dash_bootstrap_components as dbc
 import plotly.express as px
-import pandas as pd
-import random
+from open_f1_data import OpenF1LiveData  # Import the class from the separate file
 
-# Initialize Dash app
-app = dash.Dash(__name__)
-app.title = "Multi-Page Graph App with Dynamic Updates"
+# Initialize OpenF1 Data Class (No session pre-selected)
+openf1 = OpenF1LiveData()
 
-# Sample Data Generator
-def generate_data():
-    return pd.DataFrame({
-        'x': range(10),
-        'y': [random.randint(0, 100) for _ in range(10)],
-        'z': [random.randint(0, 100) for _ in range(10)]
-    })
+# Initialize Dash app with Bootstrap (Darkly theme)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.DARKLY])
 
-# Layout for a page with graphs
-def page_layout(page_num, dropdowns=False):
-    return html.Div([
-        html.H1(f"Page {page_num}"),
-        
-        # Dropdowns if required (Pages 1 and 4)
-        html.Div([
-            html.Div([
-                dcc.Dropdown(
-                    id=f"dropdown-{page_num}-{i}",
-                    options=[{'label': f"Option {j}", 'value': j} for j in range(1, 5)],
-                    value=1,
-                    clearable=False
-                ) for i in range(4)
-            ], style={'display': 'flex', 'gap': '10px'}) if dropdowns else None
-        ], style={'margin-bottom': '20px'}),
-        
-        # Graphs
-        html.Div([
-            dcc.Graph(id=f"graph-{page_num}-{i}", config={'displayModeBar': False}) for i in range(3)
-        ], style={'display': 'flex', 'gap': '20px'}),
-        
-        # Interval for automatic updating (Pages 2 and 3)
-        dcc.Interval(
-            id=f'interval-{page_num}',
-            interval=5*1000,  # Update every 5 seconds
-            n_intervals=0
-        ) if page_num in [2, 3] else None
-    ])
+# Dark Mode Styling
+DARK_STYLE = {
+    "backgroundColor": "#1e1e1e",  # Dark background
+    "color": "#ffffff"  # White text
+}
 
-# Create the app layout with links to different pages
-app.layout = html.Div([
-    dcc.Location(id='url', refresh=False),
-    html.Div([
-        dcc.Link(f'Go to Page {i+1}', href=f'/page-{i+1}', style={'margin-right': '10px'}) for i in range(4)
-    ], style={'margin': '20px'}),
+# Custom Dropdown Styles for Dark Mode
+DARK_DROPDOWN_STYLE = {
+    "color": "#ffffff",  # White text
+    "backgroundColor": "#333333",  # Dark background for the dropdown
+    "borderColor": "#444444",  # Dark border for the dropdown
+    "boxShadow": "none",  # Remove box shadow
+}
 
-    html.Div(id='page-content')
-])
+# App Layout with Dark Mode
+app.layout = dbc.Container(
+    [
+        html.H1("F1 Data Viewer", style={"textAlign": "center", "color": "#ffffff"}),
 
-# Update the page content based on the URL
-@app.callback(Output('page-content', 'children'), [Input('url', 'pathname')])
-def display_page(pathname):
-    if pathname == '/page-1':
-        return page_layout(1, dropdowns=True)
-    elif pathname == '/page-2':
-        return page_layout(2)
-    elif pathname == '/page-3':
-        return page_layout(3)
-    elif pathname == '/page-4':
-        return page_layout(4, dropdowns=True)
+        # Year selection dropdown
+
+
+        # Dropdowns for selecting data type (Live vs Historical)
+        dbc.Row([
+            dbc.Col(dcc.Dropdown(
+                id="data-type",
+                options=[
+                    {'label': 'Live Data', 'value': 'live'},
+                    {'label': 'Historical Data', 'value': 'historical'}
+                ],
+                value='historical', clearable=False
+            ), width=6),
+        dbc.Row([
+             dbc.Col(dcc.Dropdown(
+                id="year-dropdown",
+                options=[{'label': str(year), 'value': year} for year in range(2020, 2025)],
+                value=2024, clearable=False
+            ), width=6),
+        ], className="mb-3"),
+
+            dbc.Col(dcc.Dropdown(
+                id="event-dropdown",
+                placeholder="Select Event",
+                clearable=False
+            ), width=6),
+        ], className="mb-3"),
+
+        # Dropdown for selecting session type
+        dbc.Row([
+            dbc.Col(dcc.Dropdown(
+                id="session-dropdown",
+                placeholder="Select Session",
+                clearable=False
+            ), width=6),
+
+            dbc.Col(dcc.Dropdown(
+                id="lap-dropdown",
+                placeholder="Select Lap",
+                clearable=False
+            ), width=6)
+        ], className="mb-3"),
+
+        # Dropdown for selecting data category
+        dcc.Dropdown(
+            id="data-category",
+            options=[
+                {'label': 'Lap Time', 'value': 'lap_duration'},
+                {'label': 'Speed', 'value': 'st_speed'}
+            ],
+            value='lap_duration', clearable=False
+        ),
+
+        # Graph for lap data
+        dcc.Graph(id="lap-graph", config={'displayModeBar': False}),
+
+        # Interval Component for Live Updates
+        dcc.Interval(id='interval-component', interval=5000, n_intervals=0)
+    ],
+    fluid=True, style=DARK_STYLE  # Apply Dark Mode Styling
+)
+
+# Callback to populate event dropdown
+@app.callback(
+    Output("event-dropdown", "options"),
+    Input("data-type", "value"),
+    Input("year-dropdown", "value")
+)
+def update_event_dropdown(data_type, selected_year):
+    print(data_type, selected_year)
+    if data_type == "live":
+        return [{'label': 'Live Session', 'value': 'live'}]
+    
+    events = openf1.get_available_events(year=selected_year)
+    print(events)
+    return [{'label': event, 'value': event} for event in events]
+
+# Callback to populate session dropdown based on selected event and year
+@app.callback(
+    Output("session-dropdown", "options"),
+    [Input("event-dropdown", "value"),
+     Input("year-dropdown", "value")]
+)
+def update_session_dropdown(event_name, selected_year):
+
+    if not event_name:
+        return []
+    
+    sessions = openf1.get_available_sessions(event_name, selected_year)
+    
+    return [{'label': session, 'value': session} for session in sessions]
+
+
+# Callback to populate lap dropdown based on selected session
+@app.callback(
+    Output("lap-dropdown", "options"),
+    [Input("event-dropdown", "value"),
+     Input("data-category", "value"),
+     Input("data-type", "value"),
+     Input("session-dropdown", "value"),
+     Input("year-dropdown", "value"),
+     Input("interval-component", "n_intervals")]
+)
+def update_lap_dropdown(event_name,data_category, data_type, session_name, selected_year, n_intervals):
+   
+    if not session_name:
+        return []
     else:
-        return html.H1("Welcome! Please select a page above.")
+         
+         session_id = openf1.get_session_id(event_name, selected_year, session_name)
+        
+    df = openf1.get_lap_data() if data_type == 'historical' else openf1.get_live_lap_data()
 
-# Generate data and update graphs for pages with dropdowns (Pages 1 and 4)
+    if df is None or df.empty:
+        
+        return []
+    return [{'label': f"Lap {lap}", 'value': lap} for lap in sorted(df['lap_number'].unique())]
+
+# Callback to update the graph
 @app.callback(
-    [Output(f"graph-1-{i}", "figure") for i in range(3)] +
-    [Output(f"graph-4-{i}", "figure") for i in range(3)],
-    [Input(f"dropdown-1-{i}", "value") for i in range(4)] +
-    [Input(f"dropdown-4-{i}", "value") for i in range(4)]
+    Output("lap-graph", "figure"),
+    [Input("lap-dropdown", "value"),
+     Input("data-category", "value"),
+     Input("data-type", "value"),
+     Input("session-dropdown", "value"),
+     Input("year-dropdown", "value"),
+     Input("interval-component", "n_intervals")]
 )
-def update_graphs_with_dropdowns(*dropdown_values):
-    data = generate_data()
-    graphs = []
-    
-    # Example graph updates based on dropdown selections
-    for i in range(3):
-        fig = px.line(data, x='x', y='y', title=f"Graph {i+1}")
-        fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), uirevision='constant')
-        graphs.append(fig)
-    
-    return graphs * 2  # Duplicate for pages 1 and 4
 
-# Update graphs on Pages 2 and 3 using Interval
-@app.callback(
-    [Output(f"graph-2-{i}", "figure") for i in range(3)] +
-    [Output(f"graph-3-{i}", "figure") for i in range(3)],
-    [Input('interval-2', 'n_intervals'), Input('interval-3', 'n_intervals')]
-)
-def update_graphs_with_interval(n_intervals_2, n_intervals_3):
-    data = generate_data()
-    graphs = []
+def update_lap_graph(selected_lap, data_category, data_type, session_name, selected_year, n_intervals):
+    print(selected_lap, data_category, data_type, session_name, selected_year, n_intervals)
+    if not session_name:
+        return px.line(title="No Session Selected", template="plotly_dark")
 
-    # Create new figures with updated data
-    for i in range(3):
-        fig = px.scatter(data, x='x', y='z', title=f"Live Graph {i+1}")
-        fig.update_layout(margin=dict(l=20, r=20, t=30, b=20), uirevision='constant')
-        graphs.append(fig)
+    df = openf1.get_lap_data() if data_type == 'historical' else openf1.get_live_lap_data()
 
-    return graphs * 2  # Duplicate for pages 2 and 3
+    if df is None or df.empty or selected_lap is None:
+        return px.line(title="No Data Available", template="plotly_dark")
+
+    df_lap = df[df['lap_number'] == selected_lap]
+
+    if data_category not in df_lap.columns:
+        return px.line(title="Data Not Available", template="plotly_dark")
+
+    fig = px.scatter(
+        df_lap, x="lap_duration", y=data_category, color="driver_number",
+        title=f"{data_category.capitalize()} for Lap {selected_lap}",
+        template="plotly_dark"
+    )
+
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=30, b=20),
+        uirevision='constant',
+        plot_bgcolor="#1e1e1e",
+        paper_bgcolor="#1e1e1e",
+        font=dict(color="white")
+    )
+    return fig
 
 if __name__ == '__main__':
+
     app.run_server(debug=True)
