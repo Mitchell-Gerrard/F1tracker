@@ -104,40 +104,47 @@ def update_session_dropdown(event_name, selected_year):
     return [{'label': session, 'value': session} for session in sessions] if sessions else []
 
 
-# Callback: Update Slider based on the selected session and lap data
+# Callback: Update Slider based on the selected session and longest driver time
 @dash.callback(
     [Output("replay-time-slider", "max"),
      Output("replay-time-slider", "marks"),
      Output("replay-time-slider", "value")],
     [Input("replay-event-dropdown", "value"),
      Input("replay-session-dropdown", "value"),
-     Input("replay-year-dropdown", "value"),
-     Input("replay-interval", "n_intervals")]
+     Input("replay-year-dropdown", "value")]
 )
-def update_slider(event_name, session_name, selected_year, n_intervals):
+def update_slider(event_name, session_name, selected_year):
     if not session_name:
         return 0, {}, 0
 
     session_id = openf1.get_session_id(event_name, selected_year, session_name)
 
-    # Fetch lap data: Get lap start time and lap durations
-    lap_data = openf1.get_lap_data()
-    print(lap_data,'yo')
-    
-    print('ya')
-    # Set the slider max value to the number of laps
-    num_laps = lap_data["lap_number"].max()
-    print(num_laps)
-    # Generate the marks for each lap with the cumulative time
-    marks = {
-        i: str(round(sum(lap_data["lap_duration"][:i]), 2))  # Cumulative time for each lap
-        for i in range(1, num_laps + 1)
-    }
+    # Fetch lap data: Get lap durations per driver
+    lap_data = openf1.get_lap_data(session_id)
 
-    # Set the initial value to the first lap
-    initial_value = 1
+    if lap_data.empty:
+        return 0, {}, 0
 
-    return num_laps, marks, initial_value
+    # Find the driver who took the longest total race time
+    driver_total_time = lap_data.groupby("driver_number")["lap_duration"].sum()
+    slowest_driver = driver_total_time.idxmax()  # Driver with the highest total time
+
+    # Get only this driver's lap durations
+    slowest_driver_laps = lap_data[lap_data["driver_number"] == slowest_driver].sort_values("lap_number")
+
+    # Compute cumulative race time for this driver
+    cumulative_time = slowest_driver_laps["lap_duration"].fillna(0).astype(float).cumsum()
+
+    # Max value for the slider is this driver's total race time
+    total_time = cumulative_time.iloc[-1]  # Last cumulative time is the total race duration
+
+    # Generate marks at each lap using cumulative race time
+    marks = {int(time): f"Lap {lap}" for lap, time in zip(slowest_driver_laps["lap_number"], cumulative_time)}
+
+    # Set the initial slider value to 0 (Race start)
+    initial_value = 0
+
+    return total_time, marks, initial_value
 
 
 # Callback: Update Track Map, Acceleration Chart, and Positions Table based on time slider
@@ -153,6 +160,7 @@ def update_slider(event_name, session_name, selected_year, n_intervals):
     [State("replay-play-button", "n_clicks")]
 )
 def update_replay_page(event_name, session_name, selected_year, slider_value, n_intervals, n_clicks):
+    print(slider_value)
     if not session_name:
         return px.scatter(title="No Session Selected", template="plotly_dark"), \
                px.line(title="No Data Available", template="plotly_dark"), \
@@ -163,13 +171,15 @@ def update_replay_page(event_name, session_name, selected_year, slider_value, n_
     # Fetch lap data: Get lap start time and lap durations
     lap_data = openf1.get_lap_data(session_id)
     
-    if not lap_data:
+    if lap_data.empty:
         return px.scatter(title="No Data Available", template="plotly_dark"), \
                px.line(title="No Data Available", template="plotly_dark"), \
                dbc.Table([])
 
     # Fetch data based on the total time computed from the slider
-    total_time = sum(lap_data["lap_duration"][:slider_value])
+    print(lap_data["date_start"][0])
+    total_time = sum(lap_data["date_start"][:slider_value])
+    print(total_time)
     track_df = openf1.get_race_data_at_time(session_id, total_time)
     accel_df = openf1.get_race_data_at_time(session_id, total_time)
     pos_df = openf1.get_positions_at_time(session_id, total_time)
