@@ -1,7 +1,7 @@
 import dash
 import dash_bootstrap_components as dbc
 from dash import html, dcc
-
+import pandas as pd
 # Initialize Dash app with multi-page support
 app = dash.Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.DARKLY])
 server = app.server  # Required for deployment

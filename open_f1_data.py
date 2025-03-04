@@ -19,6 +19,8 @@ class OpenF1LiveData:
                     session["year"] == year and
                     session["session_type"].lower() == session_type.lower()):
                     self.session_id = session["session_key"]
+                    self.session_start_time = pd.to_datetime(session["date_start"])
+                   
                     return session['session_key']
         return None
 
@@ -31,19 +33,33 @@ class OpenF1LiveData:
             return self.process_data(response.json())
         return None
 
-    def get_data_in_time_range(self, start_time, end_time):
+    def get_data_in_time_range(self, cental_time_offset):
+        start_time =pd.Timedelta(seconds=cental_time_offset) +self.session_start_time-pd.Timedelta(seconds=30) 
+        end_time = pd.Timedelta(seconds=cental_time_offset) +self.session_start_time+pd.Timedelta(seconds=30) 
+
         if not self.session_id:
             return None
-        url = f"{self.BASE_URL}/session-data?'session_key'={self.session_id}&start_time={start_time}&end_time={end_time}"
+
+        url = (
+            f"{self.BASE_URL}/car_data?"
+            f"session_key={self.session_id}"
+            f"&date%3E{start_time.isoformat()}"  # Start time: date%3E (greater than)
+            f"&date%3C{end_time.isoformat()}"    # End time: date%3C (less than)
+        )
+
         response = requests.get(url)
         if response.status_code == 200:
-            return self.process_data(response.json())
+            data = response.json()
+            data=pd.DataFrame(data)
+
+            
+            return data
         return None
 
     def get_first_lap_data(self):
         if not self.session_id:
             return None
-        url = f"{self.BASE_URL}/session-data?'session_key'={self.session_id}"
+        url = f"{self.BASE_URL}/session-data?session_key={self.session_id}"
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
@@ -67,7 +83,7 @@ class OpenF1LiveData:
     def get_available_events(self, year):
         url = f"{self.BASE_URL}/sessions"
         response = requests.get(url)
-        print(response.status_code)
+
         if response.status_code == 200:
             sessions = response.json()
             # Only include events where the session year matches the provided year
